@@ -1,48 +1,42 @@
+import type { Opportunity } from '@/lib/opportunity-engine';
+
 export type ActionStatus = 'new' | 'saved' | 'active' | 'completed' | 'dismissed';
 
 export type WealthAction = {
   id: string;
   userId: string;
-  opportunityId: string;
-  title: string;
-  category: string;
-  nextStep: string;
-  score: number;
+  opportunity: Opportunity;
   status: ActionStatus;
-  notes: string;
+  note: string;
   createdAt: string;
   updatedAt: string;
+  completedAt: string | null;
 };
 
 const actions = new Map<string, WealthAction>();
 
-function key(userId: string, opportunityId: string) {
-  return `${userId}:${opportunityId}`;
-}
-
 export async function listActions(userId: string): Promise<WealthAction[]> {
   return [...actions.values()]
     .filter((action) => action.userId === userId)
-    .sort((a, b) => b.score - a.score || b.updatedAt.localeCompare(a.updatedAt));
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-export async function upsertAction(input: Omit<WealthAction, 'id' | 'createdAt' | 'updatedAt'>): Promise<WealthAction> {
+export async function upsertAction(userId: string, opportunity: Opportunity, status: ActionStatus = 'saved', note = ''): Promise<WealthAction> {
+  const existing = [...actions.values()].find((action) => action.userId === userId && action.opportunity.id === opportunity.id);
   const now = new Date().toISOString();
-  const existing = actions.get(key(input.userId, input.opportunityId));
-  const action: WealthAction = {
-    ...input,
-    id: existing?.id ?? crypto.randomUUID(),
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
-  actions.set(key(input.userId, input.opportunityId), action);
+  const action: WealthAction = existing
+    ? { ...existing, opportunity, status, note, updatedAt: now, completedAt: status === 'completed' ? existing.completedAt ?? now : status === 'dismissed' ? null : existing.completedAt }
+    : { id: crypto.randomUUID(), userId, opportunity, status, note, createdAt: now, updatedAt: now, completedAt: status === 'completed' ? now : null };
+  actions.set(action.id, action);
   return action;
 }
 
-export async function updateActionStatus(userId: string, opportunityId: string, status: ActionStatus, notes?: string) {
-  const existing = actions.get(key(userId, opportunityId));
-  if (!existing) return null;
-  const updated = { ...existing, status, notes: notes ?? existing.notes, updatedAt: new Date().toISOString() };
-  actions.set(key(userId, opportunityId), updated);
-  return updated;
+export async function updateAction(userId: string, actionId: string, patch: Partial<Pick<WealthAction, 'status' | 'note'>>): Promise<WealthAction | null> {
+  const current = actions.get(actionId);
+  if (!current || current.userId !== userId) return null;
+  const now = new Date().toISOString();
+  const nextStatus = patch.status ?? current.status;
+  const next: WealthAction = { ...current, ...patch, status: nextStatus, updatedAt: now, completedAt: nextStatus === 'completed' ? current.completedAt ?? now : nextStatus === 'dismissed' ? null : current.completedAt };
+  actions.set(actionId, next);
+  return next;
 }
