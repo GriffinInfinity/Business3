@@ -4,7 +4,7 @@ import { FormEvent, useState } from 'react';
 
 type PlanResponse = {
   profile: { primaryGoal: string; riskTolerance: string };
-  plan: { savingsRate: number; runwayMonths: number; incomeGap: number; opportunities: Array<{ title: string; score: number; category: string; rationale: string; nextStep: string }> };
+  plan: { savingsRate: number; runwayMonths: number; incomeGap: number; opportunities: Array<{ id: string; title: string; score: number; category: string; rationale: string; nextStep: string }> };
 };
 
 const initial = { annualIncome: '', liquidSavings: '', monthlyExpenses: '', targetIncome: '', availableHoursPerWeek: '10', primaryGoal: 'income', riskTolerance: 'medium' };
