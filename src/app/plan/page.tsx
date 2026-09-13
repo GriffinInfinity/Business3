@@ -2,17 +2,21 @@
 
 import { FormEvent, useState } from 'react';
 
+type Opportunity = { id: string; title: string; score: number; category: string; rationale: string; nextStep: string };
 type PlanResponse = {
   profile: { primaryGoal: string; riskTolerance: string };
-  plan: { savingsRate: number; runwayMonths: number; incomeGap: number; opportunities: Array<{ id: string; title: string; score: number; category: string; rationale: string; nextStep: string }> };
+  plan: { savingsRate: number; runwayMonths: number; incomeGap: number; opportunities: Opportunity[] };
 };
+type ActionStatus = 'new' | 'saved' | 'active' | 'completed' | 'dismissed';
 
 const initial = { annualIncome: '', liquidSavings: '', monthlyExpenses: '', targetIncome: '', availableHoursPerWeek: '10', primaryGoal: 'income', riskTolerance: 'medium' };
 
 export default function PlanPage() {
   const [form, setForm] = useState(initial);
   const [result, setResult] = useState<PlanResponse | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, ActionStatus>>({});
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState('');
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setResult(null);
@@ -20,6 +24,17 @@ export default function PlanPage() {
     const data = await response.json();
     if (!response.ok) { setError(data.error ?? 'Unable to build your plan.'); return; }
     setResult(data);
+    const existing = await fetch('/api/actions').then((r) => r.ok ? r.json() : { actions: [] });
+    setStatuses(Object.fromEntries((existing.actions ?? []).map((action: { opportunityId: string; status: ActionStatus }) => [action.opportunityId, action.status])));
+  }
+
+  async function setAction(opportunity: Opportunity, status: ActionStatus) {
+    setSaving(opportunity.id); setError('');
+    const response = await fetch('/api/actions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ opportunityId: opportunity.id, status }) });
+    const data = await response.json();
+    if (!response.ok) setError(data.error ?? 'Unable to update action.');
+    else setStatuses((current) => ({ ...current, [opportunity.id]: data.action.status }));
+    setSaving('');
   }
 
   const field = (label: string, key: keyof typeof form, placeholder: string) => (
@@ -35,7 +50,7 @@ export default function PlanPage() {
         <label className="block text-sm text-slate-300"><span className="mb-2 block">Risk preference</span><select value={form.riskTolerance} onChange={(e) => setForm({ ...form, riskTolerance: e.target.value })} className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
         <button className="w-full rounded-xl bg-emerald-400 px-5 py-3 font-semibold text-slate-950 hover:bg-emerald-300">Generate my Wealth Plan</button>{error && <p className="text-sm text-red-300">{error}</p>}
       </form>
-      <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6">{!result ? <div className="flex h-full min-h-96 items-center justify-center text-center text-slate-500"><p>Your modeled plan and opportunity ranking will appear here.</p></div> : <div><p className="text-sm text-emerald-300">YOUR INITIAL MODEL</p><div className="mt-4 grid grid-cols-3 gap-3"><div className="rounded-2xl bg-slate-950 p-4"><p className="text-xs text-slate-500">Savings rate</p><p className="mt-1 text-2xl font-semibold">{Math.round(result.plan.savingsRate * 100)}%</p></div><div className="rounded-2xl bg-slate-950 p-4"><p className="text-xs text-slate-500">Runway</p><p className="mt-1 text-2xl font-semibold">{result.plan.runwayMonths.toFixed(1)} mo</p></div><div className="rounded-2xl bg-slate-950 p-4"><p className="text-xs text-slate-500">Income gap</p><p className="mt-1 text-2xl font-semibold">${Math.round(result.plan.incomeGap).toLocaleString()}</p></div></div><div className="mt-6 space-y-4">{result.plan.opportunities.map((o) => <article key={o.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"><div className="flex items-center justify-between"><div><p className="text-xs uppercase tracking-wider text-emerald-300">{o.category}</p><h2 className="mt-1 font-semibold">{o.title}</h2></div><span className="rounded-full bg-emerald-400/10 px-3 py-1 font-semibold text-emerald-300">{o.score}</span></div><p className="mt-3 text-sm leading-6 text-slate-400">{o.rationale}</p><p className="mt-3 text-sm font-medium text-slate-200">Next: {o.nextStep}</p></article>)}</div></div>}</section>
+      <section className="rounded-3xl border border-slate-800 bg-slate-900/40 p-6">{!result ? <div className="flex h-full min-h-96 items-center justify-center text-center text-slate-500"><p>Your modeled plan and opportunity ranking will appear here.</p></div> : <div><p className="text-sm text-emerald-300">YOUR INITIAL MODEL</p><div className="mt-4 grid grid-cols-3 gap-3"><div className="rounded-2xl bg-slate-950 p-4"><p className="text-xs text-slate-500">Savings rate</p><p className="mt-1 text-2xl font-semibold">{Math.round(result.plan.savingsRate * 100)}%</p></div><div className="rounded-2xl bg-slate-950 p-4"><p className="text-xs text-slate-500">Runway</p><p className="mt-1 text-2xl font-semibold">{result.plan.runwayMonths.toFixed(1)} mo</p></div><div className="rounded-2xl bg-slate-950 p-4"><p className="text-xs text-slate-500">Income gap</p><p className="mt-1 text-2xl font-semibold">${Math.round(result.plan.incomeGap).toLocaleString()}</p></div></div><div className="mt-6 space-y-4">{result.plan.opportunities.map((o) => { const status = statuses[o.id] ?? 'new'; return <article key={o.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5"><div className="flex items-center justify-between"><div><p className="text-xs uppercase tracking-wider text-emerald-300">{o.category}</p><h2 className="mt-1 font-semibold">{o.title}</h2></div><span className="rounded-full bg-emerald-400/10 px-3 py-1 font-semibold text-emerald-300">{o.score}</span></div><p className="mt-3 text-sm leading-6 text-slate-400">{o.rationale}</p><p className="mt-3 text-sm font-medium text-slate-200">Next: {o.nextStep}</p><div className="mt-4 flex flex-wrap items-center gap-2"><button disabled={saving === o.id} onClick={() => setAction(o, status === 'saved' ? 'active' : 'saved')} className="rounded-lg border border-slate-700 px-3 py-2 text-sm font-medium hover:border-emerald-400 disabled:opacity-50">{status === 'active' ? 'Active' : status === 'saved' ? 'Saved · Activate' : 'Save opportunity'}</button>{(status === 'active' || status === 'saved') && <button disabled={saving === o.id} onClick={() => setAction(o, 'completed')} className="rounded-lg bg-emerald-400 px-3 py-2 text-sm font-semibold text-slate-950 disabled:opacity-50">Mark complete</button>}<span className="text-xs uppercase tracking-wider text-slate-500">{status}</span></div></article>; })}</div></div>}</section>
     </div>
   </div></main>;
 }
