@@ -19,7 +19,6 @@ export async function POST(request: Request) {
       cancel_url: `${origin}/plan?billing=cancelled`,
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
-      integration_identifier: 'wealthos_web_7hKpQmXa',
     });
     return Response.json({ url: session.url });
   } catch (error) {
