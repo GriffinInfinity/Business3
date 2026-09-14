@@ -1,0 +1,21 @@
+name: Vercel Daily Deployment Gate
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel
+        run: |
+          echo "Daily Vercel deployment gate for Business3."
+          echo "Connect this workflow to the Vercel CLI/token when deployment credentials are configured."
